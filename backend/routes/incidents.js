@@ -57,5 +57,40 @@ router.post("/", async (req, res) => {
     });
   }
 });
+// GET /api/incidents/:id
+router.get("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
 
+    const result = await pool.query(
+      `SELECT
+        id,
+        incident_type,
+        description,
+        latitude,
+        longitude,
+        status,
+        created_at
+       FROM incidents
+       WHERE id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        message: "Incident not found.",
+      });
+    }
+
+    res.status(200).json({
+      incident: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Error fetching incident:", error);
+
+    res.status(500).json({
+      message: "Failed to retrieve incident.",
+    });
+  }
+});
 module.exports = router;

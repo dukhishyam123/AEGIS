@@ -12,6 +12,10 @@ function App() {
   const [message, setMessage] = useState("");
   const [locationStatus, setLocationStatus] = useState("");
 
+  const [incidentId, setIncidentId] = useState("");
+  const [incident, setIncident] = useState(null);
+  const [statusError, setStatusError] = useState("");
+
   const handleChange = (e) => {
     setForm({
       ...form,
@@ -21,9 +25,7 @@ function App() {
 
   const getLocation = () => {
     if (!navigator.geolocation) {
-      setLocationStatus(
-        "Geolocation is not supported by this browser."
-      );
+      setLocationStatus("Geolocation is not supported.");
       return;
     }
 
@@ -31,42 +33,16 @@ function App() {
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const latitude = position.coords.latitude;
-        const longitude = position.coords.longitude;
-
-        setForm((currentForm) => ({
-          ...currentForm,
-          latitude,
-          longitude,
+        setForm((current) => ({
+          ...current,
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
         }));
 
         setLocationStatus("Location captured successfully.");
       },
-      (error) => {
-        console.error("Location error:", error);
-
-        if (error.code === 1) {
-          setLocationStatus(
-            "Location permission was denied. Please allow location access."
-          );
-        } else if (error.code === 2) {
-          setLocationStatus(
-            "Your location could not be determined."
-          );
-        } else if (error.code === 3) {
-          setLocationStatus(
-            "Location request timed out. Please try again."
-          );
-        } else {
-          setLocationStatus(
-            "Unable to get your location."
-          );
-        }
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
+      () => {
+        setLocationStatus("Unable to get your location.");
       }
     );
   };
@@ -87,10 +63,8 @@ function App() {
         }
       );
 
-      console.log("Incident created:", response.data);
-
       setMessage(
-        "Emergency reported successfully."
+        `Emergency reported successfully. Incident ID: ${response.data.incident.id}`
       );
 
       setForm({
@@ -102,11 +76,34 @@ function App() {
 
       setLocationStatus("");
     } catch (error) {
-      console.error("Submission error:", error);
+      console.error(error);
+      setMessage("Failed to submit emergency report.");
+    }
+  };
 
-      setMessage(
-        "Failed to submit emergency report."
+  const checkIncidentStatus = async () => {
+    setIncident(null);
+    setStatusError("");
+
+    if (!incidentId) {
+      setStatusError("Please enter an incident ID.");
+      return;
+    }
+
+    try {
+      const response = await axios.get(
+        `http://localhost:5000/api/incidents/${incidentId}`
       );
+
+      setIncident(response.data.incident);
+    } catch (error) {
+      console.error(error);
+
+      if (error.response?.status === 404) {
+        setStatusError("Incident not found.");
+      } else {
+        setStatusError("Unable to retrieve incident status.");
+      }
     }
   };
 
@@ -114,7 +111,7 @@ function App() {
     <div
       style={{
         maxWidth: "700px",
-        margin: "50px auto",
+        margin: "40px auto",
         padding: "30px",
         fontFamily: "Arial, sans-serif",
       }}
@@ -123,14 +120,7 @@ function App() {
 
       <h2>Emergency Incident Report</h2>
 
-      <p>
-        Submit an emergency report so that it can be
-        recorded and processed by AEGIS.
-      </p>
-
       <form onSubmit={handleSubmit}>
-        {/* Incident Type */}
-
         <label>
           <strong>Incident Type</strong>
         </label>
@@ -144,17 +134,13 @@ function App() {
         >
           <option value="FIRE">Fire</option>
           <option value="ACCIDENT">Accident</option>
-          <option value="MEDICAL">
-            Medical Emergency
-          </option>
+          <option value="MEDICAL">Medical Emergency</option>
           <option value="FLOOD">Flood</option>
           <option value="OTHER">Other</option>
         </select>
 
         <br />
         <br />
-
-        {/* Description */}
 
         <label>
           <strong>Description</strong>
@@ -179,24 +165,16 @@ function App() {
         <br />
         <br />
 
-        {/* Location */}
-
         <h3>Emergency Location</h3>
 
         <button
           type="button"
           onClick={getLocation}
-          style={{
-            padding: "10px 16px",
-            cursor: "pointer",
-          }}
         >
           📍 Use My Location
         </button>
 
         <p>{locationStatus}</p>
-
-        {/* Latitude */}
 
         <label>
           <strong>Latitude</strong>
@@ -210,14 +188,11 @@ function App() {
           name="latitude"
           value={form.latitude}
           onChange={handleChange}
-          placeholder="Example: 28.6139"
           required
         />
 
         <br />
         <br />
-
-        {/* Longitude */}
 
         <label>
           <strong>Longitude</strong>
@@ -231,38 +206,76 @@ function App() {
           name="longitude"
           value={form.longitude}
           onChange={handleChange}
-          placeholder="Example: 77.2090"
           required
         />
 
         <br />
         <br />
 
-        {/* Submit */}
-
-        <button
-          type="submit"
-          style={{
-            padding: "12px 20px",
-            cursor: "pointer",
-            fontWeight: "bold",
-          }}
-        >
+        <button type="submit">
           🚨 Report Emergency
         </button>
       </form>
 
-      {/* Result message */}
-
       {message && (
-        <p
-          style={{
-            marginTop: "20px",
-            fontWeight: "bold",
-          }}
-        >
-          {message}
+        <p>
+          <strong>{message}</strong>
         </p>
+      )}
+
+      <hr />
+
+      <h2>Check Emergency Status</h2>
+
+      <p>
+        Enter your incident ID to check its current status.
+      </p>
+
+      <input
+        type="number"
+        value={incidentId}
+        onChange={(e) => setIncidentId(e.target.value)}
+        placeholder="Incident ID"
+      />
+
+      <button
+        type="button"
+        onClick={checkIncidentStatus}
+        style={{ marginLeft: "10px" }}
+      >
+        Check Status
+      </button>
+
+      {statusError && (
+        <p>
+          <strong>{statusError}</strong>
+        </p>
+      )}
+
+      {incident && (
+        <div>
+          <h3>Incident #{incident.id}</h3>
+
+          <p>
+            <strong>Type:</strong> {incident.incident_type}
+          </p>
+
+          <p>
+            <strong>Description:</strong> {incident.description}
+          </p>
+
+          <p>
+            <strong>Status:</strong> {incident.status}
+          </p>
+
+          <p>
+            <strong>Latitude:</strong> {incident.latitude}
+          </p>
+
+          <p>
+            <strong>Longitude:</strong> {incident.longitude}
+          </p>
+        </div>
       )}
     </div>
   );
