@@ -1,284 +1,255 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
 
+const API_URL = "http://localhost:5000/api/incidents";
+
+const STATUS_OPTIONS = [
+  "REPORTED",
+  "ACKNOWLEDGED",
+  "IN_PROGRESS",
+  "RESOLVED",
+];
+
 function App() {
-  const [form, setForm] = useState({
-    incident_type: "FIRE",
-    description: "",
-    latitude: "",
-    longitude: "",
-  });
-
+  const [incidents, setIncidents] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
-  const [locationStatus, setLocationStatus] = useState("");
+  const [updatingId, setUpdatingId] = useState(null);
 
-  const [incidentId, setIncidentId] = useState("");
-  const [incident, setIncident] = useState(null);
-  const [statusError, setStatusError] = useState("");
-
-  const handleChange = (e) => {
-    setForm({
-      ...form,
-      [e.target.name]: e.target.value,
-    });
-  };
-
-  const getLocation = () => {
-    if (!navigator.geolocation) {
-      setLocationStatus("Geolocation is not supported.");
-      return;
-    }
-
-    setLocationStatus("Getting your location...");
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setForm((current) => ({
-          ...current,
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        }));
-
-        setLocationStatus("Location captured successfully.");
-      },
-      () => {
-        setLocationStatus("Unable to get your location.");
-      }
-    );
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    setMessage("Submitting emergency report...");
-
+  const fetchIncidents = async () => {
     try {
-      const response = await axios.post(
-        "http://localhost:5000/api/incidents",
-        {
-          incident_type: form.incident_type,
-          description: form.description,
-          latitude: Number(form.latitude),
-          longitude: Number(form.longitude),
-        }
-      );
+      setLoading(true);
+      setMessage("");
 
-      setMessage(
-        `Emergency reported successfully. Incident ID: ${response.data.incident.id}`
-      );
+      const response = await axios.get(API_URL);
 
-      setForm({
-        incident_type: "FIRE",
-        description: "",
-        latitude: "",
-        longitude: "",
+      setIncidents(response.data.incidents || response.data || []);
+    } catch (error) {
+      console.error("Error fetching incidents:", error);
+      setMessage("Failed to load incidents.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchIncidents();
+  }, []);
+
+  const updateStatus = async (id, status) => {
+    try {
+      setUpdatingId(id);
+      setMessage("");
+
+      const response = await axios.put(`${API_URL}/${id}/status`, {
+        status,
       });
 
-      setLocationStatus("");
-    } catch (error) {
-      console.error(error);
-      setMessage("Failed to submit emergency report.");
-    }
-  };
+      const updatedIncident = response.data.incident;
 
-  const checkIncidentStatus = async () => {
-    setIncident(null);
-    setStatusError("");
-
-    if (!incidentId) {
-      setStatusError("Please enter an incident ID.");
-      return;
-    }
-
-    try {
-      const response = await axios.get(
-        `http://localhost:5000/api/incidents/${incidentId}`
+      setIncidents((currentIncidents) =>
+        currentIncidents.map((incident) =>
+          incident.id === id ? updatedIncident : incident
+        )
       );
 
-      setIncident(response.data.incident);
+      setMessage(`Incident #${id} updated to ${status}.`);
     } catch (error) {
-      console.error(error);
+      console.error("Error updating status:", error);
 
-      if (error.response?.status === 404) {
-        setStatusError("Incident not found.");
-      } else {
-        setStatusError("Unable to retrieve incident status.");
-      }
+      const errorMessage =
+        error.response?.data?.message ||
+        "Failed to update incident status.";
+
+      setMessage(errorMessage);
+    } finally {
+      setUpdatingId(null);
     }
   };
 
   return (
     <div
       style={{
-        maxWidth: "700px",
-        margin: "40px auto",
-        padding: "30px",
+        minHeight: "100vh",
+        background: "#f4f6f8",
+        padding: "40px",
         fontFamily: "Arial, sans-serif",
       }}
     >
-      <h1>AEGIS</h1>
-
-      <h2>Emergency Incident Report</h2>
-
-      <form onSubmit={handleSubmit}>
-        <label>
-          <strong>Incident Type</strong>
-        </label>
-
-        <br />
-
-        <select
-          name="incident_type"
-          value={form.incident_type}
-          onChange={handleChange}
-        >
-          <option value="FIRE">Fire</option>
-          <option value="ACCIDENT">Accident</option>
-          <option value="MEDICAL">Medical Emergency</option>
-          <option value="FLOOD">Flood</option>
-          <option value="OTHER">Other</option>
-        </select>
-
-        <br />
-        <br />
-
-        <label>
-          <strong>Description</strong>
-        </label>
-
-        <br />
-
-        <textarea
-          name="description"
-          value={form.description}
-          onChange={handleChange}
-          placeholder="Describe the emergency"
-          rows="5"
-          style={{
-            width: "100%",
-            padding: "10px",
-            boxSizing: "border-box",
-          }}
-          required
-        />
-
-        <br />
-        <br />
-
-        <h3>Emergency Location</h3>
-
-        <button
-          type="button"
-          onClick={getLocation}
-        >
-          📍 Use My Location
-        </button>
-
-        <p>{locationStatus}</p>
-
-        <label>
-          <strong>Latitude</strong>
-        </label>
-
-        <br />
-
-        <input
-          type="number"
-          step="any"
-          name="latitude"
-          value={form.latitude}
-          onChange={handleChange}
-          required
-        />
-
-        <br />
-        <br />
-
-        <label>
-          <strong>Longitude</strong>
-        </label>
-
-        <br />
-
-        <input
-          type="number"
-          step="any"
-          name="longitude"
-          value={form.longitude}
-          onChange={handleChange}
-          required
-        />
-
-        <br />
-        <br />
-
-        <button type="submit">
-          🚨 Report Emergency
-        </button>
-      </form>
-
-      {message && (
-        <p>
-          <strong>{message}</strong>
-        </p>
-      )}
-
-      <hr />
-
-      <h2>Check Emergency Status</h2>
-
-      <p>
-        Enter your incident ID to check its current status.
-      </p>
-
-      <input
-        type="number"
-        value={incidentId}
-        onChange={(e) => setIncidentId(e.target.value)}
-        placeholder="Incident ID"
-      />
-
-      <button
-        type="button"
-        onClick={checkIncidentStatus}
-        style={{ marginLeft: "10px" }}
+      <div
+        style={{
+          maxWidth: "1200px",
+          margin: "0 auto",
+        }}
       >
-        Check Status
-      </button>
+        <div
+          style={{
+            background: "white",
+            padding: "28px",
+            borderRadius: "12px",
+            boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
+            marginBottom: "24px",
+          }}
+        >
+          <h1 style={{ margin: 0, color: "#172b4d" }}>
+            AEGIS Government Officer Dashboard
+          </h1>
 
-      {statusError && (
-        <p>
-          <strong>{statusError}</strong>
-        </p>
-      )}
-
-      {incident && (
-        <div>
-          <h3>Incident #{incident.id}</h3>
-
-          <p>
-            <strong>Type:</strong> {incident.incident_type}
+          <p style={{ color: "#6b778c", marginBottom: "20px" }}>
+            Monitor and manage reported emergency incidents.
           </p>
 
-          <p>
-            <strong>Description:</strong> {incident.description}
-          </p>
+          <button
+            onClick={fetchIncidents}
+            style={{
+              padding: "10px 18px",
+              border: "none",
+              borderRadius: "6px",
+              background: "#0c66e4",
+              color: "white",
+              cursor: "pointer",
+              fontWeight: "bold",
+            }}
+          >
+            Refresh Incidents
+          </button>
 
-          <p>
-            <strong>Status:</strong> {incident.status}
-          </p>
-
-          <p>
-            <strong>Latitude:</strong> {incident.latitude}
-          </p>
-
-          <p>
-            <strong>Longitude:</strong> {incident.longitude}
-          </p>
+          {message && (
+            <p
+              style={{
+                marginTop: "15px",
+                color: "#172b4d",
+                fontWeight: "bold",
+              }}
+            >
+              {message}
+            </p>
+          )}
         </div>
-      )}
+
+        <div
+          style={{
+            background: "white",
+            padding: "24px",
+            borderRadius: "12px",
+            boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
+            overflowX: "auto",
+          }}
+        >
+          <h2 style={{ marginTop: 0, color: "#172b4d" }}>
+            Emergency Incidents
+          </h2>
+
+          {loading ? (
+            <p>Loading incidents...</p>
+          ) : incidents.length === 0 ? (
+            <p>No emergency incidents found.</p>
+          ) : (
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                marginTop: "20px",
+              }}
+            >
+              <thead>
+                <tr style={{ background: "#f4f5f7" }}>
+                  <th style={thStyle}>ID</th>
+                  <th style={thStyle}>Type</th>
+                  <th style={thStyle}>Description</th>
+                  <th style={thStyle}>Latitude</th>
+                  <th style={thStyle}>Longitude</th>
+                  <th style={thStyle}>Status</th>
+                  <th style={thStyle}>Created</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {incidents.map((incident) => (
+                  <tr key={incident.id}>
+                    <td style={tdStyle}>{incident.id}</td>
+
+                    <td style={tdStyle}>
+                      {incident.incident_type}
+                    </td>
+
+                    <td style={tdStyle}>
+                      {incident.description}
+                    </td>
+
+                    <td style={tdStyle}>
+                      {incident.latitude}
+                    </td>
+
+                    <td style={tdStyle}>
+                      {incident.longitude}
+                    </td>
+
+                    <td style={tdStyle}>
+                      <select
+                        value={incident.status}
+                        disabled={updatingId === incident.id}
+                        onChange={(event) =>
+                          updateStatus(
+                            incident.id,
+                            event.target.value
+                          )
+                        }
+                        style={{
+                          padding: "8px",
+                          borderRadius: "6px",
+                          border: "1px solid #dfe1e6",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {STATUS_OPTIONS.map((status) => (
+                          <option key={status} value={status}>
+                            {status}
+                          </option>
+                        ))}
+                      </select>
+
+                      {updatingId === incident.id && (
+                        <span
+                          style={{
+                            marginLeft: "8px",
+                            color: "#6b778c",
+                          }}
+                        >
+                          Updating...
+                        </span>
+                      )}
+                    </td>
+
+                    <td style={tdStyle}>
+                      {incident.created_at
+                        ? new Date(
+                            incident.created_at
+                          ).toLocaleString()
+                        : "-"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
+
+const thStyle = {
+  padding: "14px",
+  textAlign: "left",
+  borderBottom: "2px solid #dfe1e6",
+  color: "#172b4d",
+};
+
+const tdStyle = {
+  padding: "14px",
+  borderBottom: "1px solid #dfe1e6",
+  verticalAlign: "top",
+};
 
 export default App;
