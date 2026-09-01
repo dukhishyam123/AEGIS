@@ -1,42 +1,106 @@
+require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
-const pool = require("./db");
-const incidentsRouter = require("./routes/incidents");
-require("dotenv").config();
+
+const authRoutes =
+  require("./routes/auth");
+
+const incidentRoutes =
+  require("./routes/incidents");
 
 const app = express();
 
-app.use(cors());
-app.use(express.json());
-app.use("/api/incidents", incidentsRouter);
+const PORT =
+  process.env.PORT || 5000;
+
+
+// ======================================================
+// MIDDLEWARE
+// ======================================================
+
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+  })
+);
+
+app.use(
+  express.json()
+);
+
+
+// ======================================================
+// TEST ROUTE
+// ======================================================
 
 app.get("/", (req, res) => {
   res.json({
-    message: "AEGIS Backend is running",
+    message:
+      "AEGIS backend is running.",
   });
 });
 
-app.get("/api/health", async (req, res) => {
-  try {
-    const result = await pool.query("SELECT NOW()");
 
-    res.json({
-      status: "ok",
-      database: "connected",
-      time: result.rows[0].now,
-    });
-  } catch (error) {
-    console.error("Database connection error:", error);
+// ======================================================
+// ROUTES
+// ======================================================
 
-    res.status(500).json({
-      status: "error",
-      database: "disconnected",
+app.use(
+  "/api/auth",
+  authRoutes
+);
+
+app.use(
+  "/api/incidents",
+  incidentRoutes
+);
+
+
+// ======================================================
+// 404
+// ======================================================
+
+app.use(
+  (req, res) => {
+    res.status(404).json({
+      message:
+        "API route not found.",
     });
   }
-});
+);
 
-const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`AEGIS backend running on http://localhost:${PORT}`);
-});
+// ======================================================
+// ERROR HANDLER
+// ======================================================
+
+app.use(
+  (error, req, res, next) => {
+
+    console.error(
+      "Unhandled server error:",
+      error
+    );
+
+    res.status(500).json({
+      message:
+        "Internal server error.",
+    });
+  }
+);
+
+
+// ======================================================
+// START
+// ======================================================
+
+app.listen(
+  PORT,
+  () => {
+    console.log(
+      `AEGIS backend running on http://localhost:${PORT}`
+    );
+  }
+);
